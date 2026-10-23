@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "933697306274",
+    "firebase_url": "https://flutter-crud-app-b0026-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "flutter-crud-app-b0026",
+    "storage_bucket": "flutter-crud-app-b0026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:933697306274:android:9ea136e320c6240b03a1fb",
+        "android_client_info": {
+          "package_name": "com.example.buku_alamat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBr9RaD2TfLUeN9v0aGIrthZ8FoVv9Hfuc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
