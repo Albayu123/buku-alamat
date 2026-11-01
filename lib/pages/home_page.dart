@@ -1,6 +1,12 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/contact.dart';
+import '../theme/theme_controller.dart';
+import '../widgets/contact_card.dart';
+import '../widgets/contact_detail_sheet.dart';
+import '../widgets/delete_dialog.dart';
+import '../widgets/empty_state.dart';
 import 'contact_form_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -15,251 +21,297 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  void _deleteContact(String id, String name) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus Kontak'),
-        content: Text('Yakin ingin menghapus "$name" dari buku alamat?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _dbRef.child(id).remove();
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('"$name" berhasil dihapus')));
-      }
-    }
-  }
-
-  void _openForm({Contact? contact}) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ContactFormPage(contact: contact)),
-    );
-
-    if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            contact == null
-                ? 'Kontak berhasil ditambahkan'
-                : 'Kontak berhasil diperbarui',
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
+  void _deleteContact(String id, String name) async {
+    final confirm = await DeleteContactDialog.show(context, contactName: name);
+
+    if (confirm == true) {
+      try {
+        await _dbRef.child(id).remove();
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Kontak "$name" berhasil dihapus')),
+                ],
+              ),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menghapus: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  void _openForm({Contact? contact}) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactFormPage(contact: contact),
+      ),
+    );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF059669),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  contact == null
+                      ? 'Kontak baru berhasil ditambahkan'
+                      : 'Kontak "${contact.name}" berhasil diperbarui',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  void _openContactDetails(Contact contact) {
+    ContactDetailSheet.show(
+      context,
+      contact: contact,
+      onEdit: () => _openForm(contact: contact),
+      onDelete: () => _deleteContact(contact.id, contact.name),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Buku Alamat'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Cari nama atau nomor...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      body: SafeArea(
+        bottom: false,
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverAppBar(
+                floating: true,
+                pinned: true,
+                snap: false,
+                elevation: innerBoxIsScrolled ? 2 : 0,
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Buku Alamat',
+                      style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    Text(
+                      'Kelola kontak & relasi Anda',
+                      style: GoogleFonts.openSans(
+                        fontSize: 12,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ],
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                actions: [
+                  IconButton(
+                    icon: Icon(
+                      isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    tooltip: isDark ? 'Mode Terang' : 'Mode Gelap',
+                    onPressed: () {
+                      ThemeController.instance.toggleTheme(context);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(68),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: TextField(
+                      controller: _searchController,
+                      style: GoogleFonts.openSans(fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Cari nama, nomor, atau email...',
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: theme.colorScheme.primary,
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                      ),
+                      onChanged: (value) {
+                        setState(() => _searchQuery = value.toLowerCase().trim());
+                      },
+                    ),
+                  ),
+                ),
               ),
-              onChanged: (value) {
-                setState(() => _searchQuery = value.toLowerCase());
-              },
-            ),
+            ];
+          },
+          body: StreamBuilder<DatabaseEvent>(
+            stream: _dbRef.onValue,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        color: theme.colorScheme.primary,
+                        strokeWidth: 3,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Memuat daftar kontak...',
+                        style: GoogleFonts.openSans(
+                          fontSize: 14,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.cloud_off_rounded,
+                          size: 64,
+                          color: Colors.red.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Koneksi Gagal',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Terjadi kesalahan saat memuat data: ${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.openSans(
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                return EmptyStateWidget.noContacts(
+                  onAddPressed: () => _openForm(),
+                );
+              }
+
+              final rawValue = snapshot.data!.snapshot.value;
+              if (rawValue is! Map) {
+                return const Center(child: Text('Format data tidak valid.'));
+              }
+
+              final data = Map<dynamic, dynamic>.from(rawValue);
+              final contacts = data.entries
+                  .where((e) => e.value is Map)
+                  .map(
+                    (e) => Contact.fromMap(
+                      e.key.toString(),
+                      Map<dynamic, dynamic>.from(e.value as Map),
+                    ),
+                  )
+                  .where((c) {
+                    if (_searchQuery.isEmpty) return true;
+                    return c.name.toLowerCase().contains(_searchQuery) ||
+                        c.phone.toLowerCase().contains(_searchQuery) ||
+                        c.email.toLowerCase().contains(_searchQuery) ||
+                        c.address.toLowerCase().contains(_searchQuery);
+                  })
+                  .toList();
+
+              // Urutkan berdasarkan nama (A-Z)
+              contacts.sort(
+                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+              );
+
+              if (contacts.isEmpty) {
+                if (_searchQuery.isNotEmpty) {
+                  return EmptyStateWidget.searchNotFound(
+                    query: _searchQuery,
+                    onClearSearch: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  );
+                }
+                return EmptyStateWidget.noContacts(
+                  onAddPressed: () => _openForm(),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.only(top: 8, bottom: 90),
+                itemCount: contacts.length,
+                itemBuilder: (context, index) {
+                  final contact = contacts[index];
+                  return ContactCard(
+                    key: ValueKey(contact.id),
+                    contact: contact,
+                    onTap: () => _openContactDetails(contact),
+                    onEdit: () => _openForm(contact: contact),
+                    onDelete: () => _deleteContact(contact.id, contact.name),
+                  );
+                },
+              );
+            },
           ),
         ),
       ),
-      body: StreamBuilder<DatabaseEvent>(
-        stream: _dbRef.onValue,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.contacts_outlined, size: 80, color: Colors.grey),
-                  SizedBox(height: 12),
-                  Text(
-                    'Buku alamat masih kosong.\nTekan tombol + untuk menambah kontak.',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final rawValue = snapshot.data!.snapshot.value;
-          if (rawValue is! Map) {
-            return const Center(child: Text('Format data tidak valid.'));
-          }
-
-          final data = Map<dynamic, dynamic>.from(rawValue);
-          final contacts = data.entries
-              .where((e) => e.value is Map)
-              .map(
-                (e) => Contact.fromMap(
-                  e.key.toString(),
-                  Map<dynamic, dynamic>.from(e.value as Map),
-                ),
-              )
-              .where((c) {
-                if (_searchQuery.isEmpty) return true;
-                return c.name.toLowerCase().contains(_searchQuery) ||
-                    c.phone.toLowerCase().contains(_searchQuery);
-              })
-              .toList();
-
-          // Urutkan berdasarkan nama (A-Z)
-          contacts.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-          );
-
-          if (contacts.isEmpty) {
-            return Center(
-              child: Text('Tidak ada kontak yang cocok dengan "$_searchQuery"'),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.only(bottom: 80),
-            itemCount: contacts.length,
-            itemBuilder: (context, index) {
-              final contact = contacts[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.shade100,
-                    child: Text(
-                      contact.name.isNotEmpty
-                          ? contact.name[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  title: Text(
-                    contact.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.phone, size: 14, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Text(contact.phone),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          const Icon(Icons.email, size: 14, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              contact.email,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          const Icon(Icons.home, size: 14, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              contact.address,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _openForm(contact: contact);
-                      } else if (value == 'delete') {
-                        _deleteContact(contact.id, contact.name);
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, color: Colors.orange, size: 20),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, color: Colors.red, size: 20),
-                            SizedBox(width: 8),
-                            Text('Hapus'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
-        icon: const Icon(Icons.person_add),
-        label: const Text('Tambah Kontak'),
+        icon: const Icon(Icons.person_add_rounded, size: 20),
+        label: Text(
+          'Tambah Kontak',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
